@@ -25,7 +25,7 @@ pub fn add_transaction(conn: &Connection, client: Option<&Client>, to_pay: i64, 
     ::insert_into("transactions")
         .fields(&["uid", "date", "to_pay", "payed", "detail"])
         .values(&[
-            client.map_or("NULL".to_string(), |c| c.get_uid().to_string()),
+            client.map_or("NULL".to_string(), |c| c.uid().to_string()),
             date.to_string(),
             to_pay.to_string(),
             payed.to_string(),

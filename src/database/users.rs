@@ -10,7 +10,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn get_uid(&self) -> u64 { self.uid }
+    pub fn uid(&self) -> u64 { self.uid }
 }
 
 pub struct Alias {
