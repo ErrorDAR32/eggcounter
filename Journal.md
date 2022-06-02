@@ -31,3 +31,9 @@ should prepare proper testing with a mock database
 updated names on transaction table to price and payment
 
 added update user balance delta
+
+i should do a better job with the time, for now 
+im storing seconds from epoch, a quick and dirty way of timestamps
+
+i should write a facility for proofing table column names for having a 
+robust type checked system and not just writing the names directly
