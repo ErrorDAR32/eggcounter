@@ -2,6 +2,7 @@ use rusqlite::Connection;
 use std::error::Error;
 use sql_builder::prelude::*;
 
+#[derive(Debug)]
 pub struct Client {
     name: String,
     detail: Option<String>,
@@ -19,9 +20,28 @@ pub struct Alias {
     uid: u64,
 }
 
-pub struct Ufilter<'a> {
-    name: Option<&'a str>,
+pub struct Ufilter {
+    name: Option<String>,
     uid: Option<u64>,
+}
+
+impl Ufilter {
+    pub fn new() -> Ufilter{
+        Ufilter {
+            name: None,
+            uid: None,
+        }
+    }
+
+    pub fn with_name(mut self, name: String) -> Ufilter{
+        self.name = Some(name);
+        self
+    }
+
+    pub fn with_uid(mut self, uid: u64) -> Ufilter{
+        self.uid = Some(uid);
+        self
+    }
 }
 
 pub fn add_user(conn: &Connection, name: &str, detail: &str) -> Result<(), Box<dyn Error>> {
@@ -142,5 +162,45 @@ pub fn remove_alias<'a>(conn: &Connection, aliasid: u64) -> Result<(), Box<dyn E
 
     conn.execute(&stm, [])?;
 
+    Ok(())
+}
+
+pub fn update_alias(conn: &Connection, alias: &Alias) -> Result<(), Box<dyn Error>> {
+    let mut stm = SqlBuilder::update_table("aliases")
+        .set("alias", &alias.alias)
+        .and_where_eq("aid", alias.aid).sql()?;
+
+    conn.execute(&stm, [])?;
+
+    Ok(())
+}
+
+pub fn update_user_balance(conn: &Connection, u: &Client) -> Result<(), Box<dyn Error>> {
+
+    let mut tp_stm = SqlBuilder::select_from("transactions")
+        .field("SUM(price)")
+        .and_where_eq("uid", u.uid).subquery()?;
+
+    let mut pd_stm = SqlBuilder::select_from("transactions")
+        .field("SUM(payment)")
+        .and_where_eq("uid", u.uid).subquery()?;
+
+    let mut stm = SqlBuilder::update_table("clients")
+        .field("balance")
+        .set("balance", &format!("{} - {}", pd_stm, tp_stm))
+        .and_where_eq("uid", u.uid).sql()?;
+
+    conn.execute(&stm, [])?;
+    Ok(())
+}
+
+pub fn update_user_balance_delta(conn: &Connection, uid: u64, balance_delta: i64) -> Result<(), Box<dyn Error>> {
+
+    let mut stm = SqlBuilder::update_table("clients")
+        .field("balance")
+        .set("balance", &format!("balance + {}", balance_delta))
+        .and_where_eq("uid", uid).sql()?;
+
+    conn.execute(&stm, [])?;
     Ok(())
 }

@@ -1,5 +1,5 @@
-mod users;
-mod transactions;
+pub mod users;
+pub mod transactions;
 
 use rusqlite::Connection;
 
@@ -18,8 +18,8 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
             tid INTEGER PRIMARY KEY NOT NULL,
             uid INTEGER,
             date INTEGER NOT NULL,
-            to_pay INTEGER NOT NULL,
-            payed INTEGER NOT NULL DEFAULT 0,
+            price INTEGER NOT NULL,
+            payment INTEGER NOT NULL DEFAULT 0,
             detail TEXT,
 
             FOREIGN KEY (uid) REFERENCES clients (uid)
