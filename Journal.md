@@ -23,6 +23,11 @@ should also have a module for auth, we'll figure auth later
 i was thinking on doing a TODO.md, but i will not do it for the time being, 
 and just use this journal
 
-# 26/5/22
+# 02/6/22
 ### 1st entry
-added small testing of the database interface on main function, i should prepare proper testing with a mock database
+added small testing of the database interface on main function, i 
+should prepare proper testing with a mock database
+
+updated names on transaction table to price and payment
+
+added update user balance delta
