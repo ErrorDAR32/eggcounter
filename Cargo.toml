@@ -1,6 +1,6 @@
 [package]
 name = "eggcounter"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 rusqlite = {version = "0.26.3", features=["bundled"]}
 sql-builder = "3.1.1"
+hyper = "0.14.19"
+serde = "1.0.137"
+serde_json = "1.0.81"

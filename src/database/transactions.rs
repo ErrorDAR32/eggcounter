@@ -1,9 +1,9 @@
+use super::users::Client;
+use rusqlite::Connection;
+use sql_builder::prelude::*;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use rusqlite::Connection;
-use super::users::Client;
-use sql_builder::prelude::*;
 
 pub struct Transaction {
     detail: Option<String>,
@@ -21,13 +21,14 @@ pub enum TransactionError {
 impl Display for TransactionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransactionError::InvalidPaymentOnAnonClient => write!(f, "Invalid payment on anon client"),
+            TransactionError::InvalidPaymentOnAnonClient => {
+                write!(f, "Invalid payment on anon client")
+            }
         }
     }
 }
 
-impl Error for TransactionError{}
-
+impl Error for TransactionError {}
 
 pub struct Tfilter {
     date_range: Option<(SystemTime, SystemTime)>,
@@ -36,30 +37,38 @@ pub struct Tfilter {
     uid: Option<u64>,
 }
 
-pub fn add_transaction(conn: &Connection, client: Option<&Client>, price: i64, payment: i64, detail: String, date: u64) -> Result<(), Box<dyn Error>> {
+pub fn add_transaction(
+    conn: &Connection,
+    client: Option<&Client>,
+    price: i64,
+    payment: i64,
+    detail: String,
+    date: u64,
+) -> Result<(), Box<dyn Error>> {
     if client.is_none() && payment != price {
         return Err(Box::new(TransactionError::InvalidPaymentOnAnonClient));
     }
 
-    let stm = SqlBuilder
-    ::insert_into("transactions")
+    let stm = SqlBuilder::insert_into("transactions")
         .fields(&["uid", "date", "price", "payment", "detail"])
         .values(&[
             client.map_or("NULL".to_string(), |c| c.uid().to_string()),
             date.to_string(),
             price.to_string(),
             payment.to_string(),
-            quote(detail)
-        ]).sql()?;
+            quote(detail),
+        ])
+        .sql()?;
 
     conn.execute(&stm, [])?;
-
-
 
     Ok(())
 }
 
-pub fn get_transactions(conn: &Connection, filter: Tfilter) -> Result<Vec<Transaction>, Box<dyn Error>> {
+pub fn get_transactions(
+    conn: &Connection,
+    filter: Tfilter,
+) -> Result<Vec<Transaction>, Box<dyn Error>> {
     let mut stm = SqlBuilder::select_from("transactions");
 
     if let Some((min, max)) = filter.date_range {
@@ -83,26 +92,22 @@ pub fn get_transactions(conn: &Connection, filter: Tfilter) -> Result<Vec<Transa
     let mut sql_statement = conn.prepare(&stm.sql()?)?;
 
     let users = sql_statement.query_map([], |r| {
-        Ok(
-            Transaction {
-                tid: r.get(0)?,
-                uid: r.get(1)?,
-                date: r.get(2)?,
-                price: r.get(3)?,
-                payment: r.get(4)?,
-                detail: r.get(5)?,
-            }
-        )
+        Ok(Transaction {
+            tid: r.get(0)?,
+            uid: r.get(1)?,
+            date: r.get(2)?,
+            price: r.get(3)?,
+            payment: r.get(4)?,
+            detail: r.get(5)?,
+        })
     })?;
 
-    Ok(
-        users
-            .filter_map(|u| match u {
-                Ok(a) => Some(a),
-                Err(_) => None
-            })
-            .collect()
-    )
+    Ok(users
+        .filter_map(|u| match u {
+            Ok(a) => Some(a),
+            Err(_) => None,
+        })
+        .collect())
 }
 
 pub fn update_transaction(conn: &Connection, t: &Transaction) -> Result<(), Box<dyn Error>> {
@@ -114,36 +119,48 @@ pub fn update_transaction(conn: &Connection, t: &Transaction) -> Result<(), Box<
 
     stm.set("date", (Duration::from_secs(t.date)).as_secs())
         .set("uid", t.uid)
-        .and_where_eq("tid", t.tid);;
-
+        .and_where_eq("tid", t.tid);
 
     conn.execute(&stm.sql()?, [])?;
 
     Ok(())
 }
 
-pub fn update_transaction_balance(conn: &Connection, tid: u64, balance_delta: i64) -> Result<(), Box<dyn Error>> { // todo! remember to update User balance
-    let mut stm = SqlBuilder::update_table("transactions")
+pub fn update_transaction_balance(
+    conn: &Connection,
+    tid: u64,
+    balance_delta: i64,
+) -> Result<(), Box<dyn Error>> {
+    // todo! remember to update User balance
+    let stm = SqlBuilder::update_table("transactions")
         .set("payment", "payment + ?".bind(&balance_delta))
-        .and_where_eq("tid", tid).sql()?;
+        .and_where_eq("tid", tid)
+        .sql()?;
     conn.execute(&stm, [])?;
 
     Ok(())
 }
 
-pub fn update_transaction_price(conn: &Connection, tid: u64, new_price: i64) -> Result<(), Box<dyn Error>> { // todo! remember to update User balance
-    let mut stm = SqlBuilder::update_table("transactions")
+pub fn update_transaction_price(
+    conn: &Connection,
+    tid: u64,
+    new_price: i64,
+) -> Result<(), Box<dyn Error>> {
+    // todo! remember to update User balance
+    let stm = SqlBuilder::update_table("transactions")
         .set("price", &new_price)
-        .and_where_eq("tid", tid).sql()?;
+        .and_where_eq("tid", tid)
+        .sql()?;
     conn.execute(&stm, [])?;
 
     Ok(())
 }
 
-pub fn remove_transaction<'a>(conn: &Connection, tid: u64) -> Result<(), Box<dyn Error>> { // todo! remember to update User balance
-    let stm = SqlBuilder
-    ::delete_from("transactions")
-        .and_where_eq("tid", tid).sql()?;
+pub fn remove_transaction(conn: &Connection, tid: u64) -> Result<(), Box<dyn Error>> {
+    // todo! remember to update User balance
+    let stm = SqlBuilder::delete_from("transactions")
+        .and_where_eq("tid", tid)
+        .sql()?;
 
     conn.execute(&stm, [])?;
 

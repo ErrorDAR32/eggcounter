@@ -37,3 +37,12 @@ im storing seconds from epoch, a quick and dirty way of timestamps
 
 i should write a facility for proofing table column names for having a 
 robust type checked system and not just writing the names directly
+
+# 23/8/22
+### 1st entry
+yes, i kinda abandoned this, creative block and lack of time, but i also had time to think more about this, 
+and i came to a very important conclusion, i need to create my mock database before going any further, 
+an in memory database without anything fancy, just the data properly organized, this requires moving all functions 
+in the database module to traits so i can implement them on the sqlite (implementation next to the trait itself)
+and the in memory database, also i need to revise all the code, that shouldnt be hard
+i have to delay the sqlite db implementation until after i have everything else going.
