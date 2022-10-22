@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
 
 use rusqlite::Connection;
 use sql_builder::prelude::*;
@@ -47,165 +48,201 @@ impl Ufilter {
     }
 }
 
-pub fn add_user(conn: &Connection, name: &str, detail: &str) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::insert_into("clients")
-        .fields(&["name", "detail"])
-        .values(&[&quote(name), &quote(detail)])
-        .sql()?;
-
-    conn.execute(&stm, [])?;
-
-    Ok(())
+#[derive(Debug)]
+pub enum UserError {
+    SqlInvalidQuery,
+    SqlQueryError,
 }
 
-pub fn update_user(conn: &Connection, u: &Client) -> Result<(), Box<dyn Error>> {
-    let mut stm = SqlBuilder::update_table("clients");
+impl Display for UserError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
 
-    if let Some(d) = &u.detail {
-        stm.set("detail", d);
+impl Error for UserError {}
+
+//todo: change dynamic errors for proper enums
+pub trait UserDB {
+    fn add_user(&self, name: &str, detail: &str) -> Result<(), Box<dyn Error>>;
+
+    fn update_user(&self, u: &Client) -> Result<(), Box<dyn Error>>;
+
+    fn remove_user(&self, uid: u64) -> Result<(), Box<dyn Error>>;
+
+    fn get_users(&self, filter: Ufilter) -> Result<Vec<Client>, Box<dyn Error>>;
+
+    fn add_alias<'a>(&self, client: &Client, alias: &'a str) -> Result<(), Box<dyn Error>>;
+
+    fn get_aliases(&self, client: &Client) -> Result<Vec<Alias>, Box<dyn Error>>;
+
+    fn remove_alias(&self, aliasid: u64) -> Result<(), Box<dyn Error>>;
+
+    fn update_alias(&self, alias: &Alias) -> Result<(), Box<dyn Error>>;
+
+    fn update_user_balance(&self, u: &Client) -> Result<(), Box<dyn Error>>;
+
+    fn update_user_balance_delta(&self, uid: u64, balance_delta: i64)
+        -> Result<(), Box<dyn Error>>;
+}
+
+impl UserDB for Connection {
+    fn add_user(&self, name: &str, detail: &str) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::insert_into("clients")
+            .fields(&["name", "detail"])
+            .values(&[&quote(name), &quote(detail)])
+            .sql()?;
+
+        self.execute(&stm, [])?;
+
+        Ok(())
     }
 
-    stm.set("name", &u.name).and_where_eq("tid", u.uid);
+    fn update_user(&self, u: &Client) -> Result<(), Box<dyn Error>> {
+        let mut stm = SqlBuilder::update_table("clients");
 
-    conn.execute(&stm.sql()?, [])?;
+        if let Some(d) = &u.detail {
+            stm.set("detail", d);
+        }
 
-    Ok(())
-}
+        stm.set("name", &u.name).and_where_eq("tid", u.uid);
 
-pub fn remove_user(conn: &Connection, uid: u64) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::delete_from("clients")
-        .and_where_eq("tid", uid)
-        .sql()?;
+        self.execute(&stm.sql()?, [])?;
 
-    conn.execute(&stm, [])?;
-
-    Ok(())
-}
-
-pub fn get_users(conn: &Connection, filter: Ufilter) -> Result<Vec<Client>, Box<dyn Error>> {
-    //todo! search on aliases
-    let mut stm = SqlBuilder::select_from("clients");
-    stm.field("*");
-
-    if let Some(n) = filter.name {
-        stm.and_where_eq("name", quote(n));
+        Ok(())
     }
 
-    if let Some(uid) = filter.uid {
-        stm.and_where_eq("uid", uid);
+    fn remove_user(&self, uid: u64) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::delete_from("clients")
+            .and_where_eq("tid", uid)
+            .sql()?;
+
+        self.execute(&stm, [])?;
+
+        Ok(())
     }
 
-    let mut sql_statement = conn.prepare(&stm.sql()?)?;
+    fn get_users(&self, filter: Ufilter) -> Result<Vec<Client>, Box<dyn Error>> {
+        //todo! search on aliases
+        let mut stm = SqlBuilder::select_from("clients");
+        stm.field("*");
 
-    let users = sql_statement.query_map([], |r| {
-        Ok(Client {
-            uid: r.get(0)?,
-            name: r.get(1)?,
-            balance: r.get(2)?,
-            detail: r.get(3)?,
-        })
-    })?;
+        if let Some(n) = filter.name {
+            stm.and_where_eq("name", quote(n));
+        }
 
-    Ok(users
-        .filter_map(|u| match u {
-            Ok(a) => Some(a),
-            Err(_) => None,
-        })
-        .collect())
-}
+        if let Some(uid) = filter.uid {
+            stm.and_where_eq("uid", uid);
+        }
 
-pub fn add_alias<'a>(
-    conn: &Connection,
-    client: &Client,
-    alias: &'a str,
-) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::insert_into("aliases")
-        .fields(&["uid", "alias"])
-        .values(&[client.uid.to_string(), quote(alias)])
-        .sql()?;
+        let mut sql_statement = self.prepare(&stm.sql()?)?;
 
-    conn.execute(&stm, [])?;
+        let users = sql_statement.query_map([], |r| {
+            Ok(Client {
+                uid: r.get(0)?,
+                name: r.get(1)?,
+                balance: r.get(2)?,
+                detail: r.get(3)?,
+            })
+        })?;
 
-    Ok(())
-}
+        Ok(users
+            .filter_map(|u| match u {
+                Ok(a) => Some(a),
+                Err(_) => None,
+            })
+            .collect())
+    }
 
-pub fn get_aliases(conn: &Connection, client: &Client) -> Result<Vec<Alias>, Box<dyn Error>> {
-    let stm = SqlBuilder::select_from("aliases")
-        .fields(&["aid", "alias"])
-        .and_where_eq("uid", client.uid)
-        .sql()?;
+    fn add_alias<'a>(&self, client: &Client, alias: &'a str) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::insert_into("aliases")
+            .fields(&["uid", "alias"])
+            .values(&[client.uid.to_string(), quote(alias)])
+            .sql()?;
 
-    let mut sql_statement = conn.prepare(&stm)?;
+        self.execute(&stm, [])?;
 
-    let aliases = sql_statement.query_map([], |r| {
-        Ok(Alias {
-            aid: r.get(0)?,
-            alias: r.get(1)?,
-            uid: client.uid,
-        })
-    })?;
+        Ok(())
+    }
 
-    Ok(aliases
-        .filter_map(|u| match u {
-            Ok(a) => Some(a),
-            Err(_) => None,
-        })
-        .collect())
-}
+    fn get_aliases(&self, client: &Client) -> Result<Vec<Alias>, Box<dyn Error>> {
+        let stm = SqlBuilder::select_from("aliases")
+            .fields(&["aid", "alias"])
+            .and_where_eq("uid", client.uid)
+            .sql()?;
 
-pub fn remove_alias(conn: &Connection, aliasid: u64) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::delete_from("aliases")
-        .and_where_eq("aid", aliasid)
-        .sql()?;
+        let mut sql_statement = self.prepare(&stm)?;
 
-    conn.execute(&stm, [])?;
+        let aliases = sql_statement.query_map([], |r| {
+            Ok(Alias {
+                aid: r.get(0)?,
+                alias: r.get(1)?,
+                uid: client.uid,
+            })
+        })?;
 
-    Ok(())
-}
+        Ok(aliases
+            .filter_map(|u| match u {
+                Ok(a) => Some(a),
+                Err(_) => None,
+            })
+            .collect())
+    }
 
-pub fn update_alias(conn: &Connection, alias: &Alias) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::update_table("aliases")
-        .set("alias", &alias.alias)
-        .and_where_eq("aid", alias.aid)
-        .sql()?;
+    fn remove_alias(&self, aliasid: u64) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::delete_from("aliases")
+            .and_where_eq("aid", aliasid)
+            .sql()?;
 
-    conn.execute(&stm, [])?;
+        self.execute(&stm, [])?;
 
-    Ok(())
-}
+        Ok(())
+    }
 
-pub fn update_user_balance(conn: &Connection, u: &Client) -> Result<(), Box<dyn Error>> {
-    let tp_stm = SqlBuilder::select_from("transactions")
-        .field("SUM(price)")
-        .and_where_eq("uid", u.uid)
-        .subquery()?;
+    fn update_alias(&self, alias: &Alias) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::update_table("aliases")
+            .set("alias", &alias.alias)
+            .and_where_eq("aid", alias.aid)
+            .sql()?;
 
-    let pd_stm = SqlBuilder::select_from("transactions")
-        .field("SUM(payment)")
-        .and_where_eq("uid", u.uid)
-        .subquery()?;
+        self.execute(&stm, [])?;
 
-    let stm = SqlBuilder::update_table("clients")
-        .field("balance")
-        .set("balance", &format!("{} - {}", pd_stm, tp_stm))
-        .and_where_eq("uid", u.uid)
-        .sql()?;
+        Ok(())
+    }
 
-    conn.execute(&stm, [])?;
-    Ok(())
-}
+    fn update_user_balance(&self, u: &Client) -> Result<(), Box<dyn Error>> {
+        let tp_stm = SqlBuilder::select_from("transactions")
+            .field("SUM(price)")
+            .and_where_eq("uid", u.uid)
+            .subquery()?;
 
-pub fn update_user_balance_delta(
-    conn: &Connection,
-    uid: u64,
-    balance_delta: i64,
-) -> Result<(), Box<dyn Error>> {
-    let stm = SqlBuilder::update_table("clients")
-        .field("balance")
-        .set("balance", &format!("balance + {}", balance_delta))
-        .and_where_eq("uid", uid)
-        .sql()?;
+        let pd_stm = SqlBuilder::select_from("transactions")
+            .field("SUM(payment)")
+            .and_where_eq("uid", u.uid)
+            .subquery()?;
 
-    conn.execute(&stm, [])?;
-    Ok(())
+        let stm = SqlBuilder::update_table("clients")
+            .field("balance")
+            .set("balance", &format!("{} - {}", pd_stm, tp_stm))
+            .and_where_eq("uid", u.uid)
+            .sql()?;
+
+        self.execute(&stm, [])?;
+        Ok(())
+    }
+
+    fn update_user_balance_delta(
+        &self,
+        uid: u64,
+        balance_delta: i64,
+    ) -> Result<(), Box<dyn Error>> {
+        let stm = SqlBuilder::update_table("clients")
+            .field("balance")
+            .set("balance", &format!("balance + {}", balance_delta))
+            .and_where_eq("uid", uid)
+            .sql()?;
+
+        self.execute(&stm, [])?;
+        Ok(())
+    }
 }

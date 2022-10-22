@@ -1,23 +1,25 @@
 use std::error::Error;
 use std::time::UNIX_EPOCH;
+use crate::database::users::UserDB;
+use crate::database::InitializeDB;
+use crate::database::transactions::TransactionsDB;
 
 mod database;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let conn = rusqlite::Connection::open("./db.db")?;
+    let mut conn = rusqlite::Connection::open("./db.db")?;
 
-    database::initialize(&conn)?;
+    conn.initialize()?;
 
-    database::users::add_user(&conn, "1", "lul")?;
-    let c = database::users::get_users(
-        &conn,
-        database::users::Ufilter::new().with_name("1".to_string()),
+    conn.add_user("lul", "1")?;
+    let c = conn.get_users(
+        database::users::Ufilter::new().with_name("lul".to_string()),
     )?
     .pop()
     .unwrap();
+
     let time = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    database::transactions::add_transaction(
-        &conn,
+    conn.add_transaction(
         Some(&c),
         1000,
         400,
@@ -25,12 +27,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         time,
     )?;
 
-    database::users::update_user_balance(&conn, &c)?;
+    conn.update_user_balance(&c)?;
     print!(
         "{:?}",
-        database::users::get_users(
-            &conn,
-            database::users::Ufilter::new().with_name("1".to_string())
+        conn.get_users(
+            database::users::Ufilter::new().with_name("lul".to_string())
         )?
         .pop()
         .unwrap()

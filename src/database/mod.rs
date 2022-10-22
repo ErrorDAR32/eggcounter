@@ -3,21 +3,26 @@ pub mod users;
 
 use rusqlite::Connection;
 
-///initializes a sqlite database with 3 tables, clients, aliases and transactions
-pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "
+pub trait InitializeDB {
+    ///initializes a sqlite database with 3 tables, clients, aliases and transactions
+    fn initialize(&mut self) -> Result<(), rusqlite::Error>;
+}
+
+impl InitializeDB for Connection {
+    fn initialize(&mut self) -> Result<(), rusqlite::Error> {
+        self.execute(
+            "
         CREATE TABLE IF NOT EXISTS clients (
             uid INTEGER PRIMARY KEY NOT NULL,
             name TEXT NOT NULL,
             balance INTEGER NOT NULL DEFAULT 0,
             detail TEXT
         );",
-        [],
-    )?;
+            [],
+        )?;
 
-    conn.execute(
-        "
+        self.execute(
+            "
         CREATE TABLE IF NOT EXISTS transactions (
             tid INTEGER PRIMARY KEY NOT NULL,
             uid INTEGER,
@@ -30,11 +35,11 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
                 ON UPDATE CASCADE
                 ON DELETE SET NULL
         );",
-        [],
-    )?;
+            [],
+        )?;
 
-    conn.execute(
-        "
+        self.execute(
+            "
         CREATE TABLE IF NOT EXISTS aliases (
             aid INTEGER PRIMARY KEY NOT NULL,
             uid INTEGER NOT NULL,
@@ -44,8 +49,9 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
                 ON UPDATE CASCADE
                 ON DELETE CASCADE
         );",
-        [],
-    )?;
+            [],
+        )?;
 
-    Ok(())
+        Ok(())
+    }
 }
