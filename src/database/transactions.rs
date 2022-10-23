@@ -1,4 +1,4 @@
-use super::users::Client;
+use super::clients::Client;
 use rusqlite::Connection;
 use sql_builder::prelude::*;
 use std::error::Error;
