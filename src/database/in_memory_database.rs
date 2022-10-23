@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet};
 use std::error::Error;
-use crate::database::clients::{Alias, Client, Ufilter};
+use crate::database::clients::{Alias, Client, ClientError, Ufilter};
 use crate::database::transactions::Transaction;
 use crate::ClientDB;
 
@@ -18,50 +18,53 @@ impl InMemDB {
 }
 
 impl ClientDB for InMemDB {
-    fn add_client(&mut self, name: &str, detail: &str) -> Result<(), Box<dyn Error>> {
+    fn add_client(&mut self, name: &str, detail: &str) -> Result<(), ClientError> {
         let uid = self.get_next_uid();
         self.clients.insert(Client {
-            uid,
+            cid: uid,
             name: name.to_string(),
             detail: Some(detail.to_string()),
             balance: 0});
         Ok(())
     }
 
-    fn update_client(&mut self, u: &Client) -> Result<(), Box<dyn Error>> {
-        self.clients.retain(|c| c.uid == u.uid);
+    fn update_client(&mut self, c: &Client) -> Result<(), ClientError> {
+        let client = match self.clients.take(c) {
+            None => {return Err(ClientError::QueryError)}
+            Some(c) => {c}
+        };
         Ok(())
     }
 
-    fn remove_client(self: &mut InMemDB, uid: u64) -> Result<(), Box<dyn Error>> {
+    fn remove_client(self: &mut InMemDB, uid: u64) -> Result<(), ClientError> {
         todo!()
     }
 
-    fn get_clients(&self, filter: Ufilter) -> Result<Vec<Client>, Box<dyn Error>> {
+    fn get_clients(&self, filter: Ufilter) -> Result<Vec<Client>, ClientError> {
         todo!()
     }
 
-    fn add_alias<'a>(self: &mut InMemDB, client: &Client, alias: &'a str) -> Result<(), Box<dyn Error>> {
+    fn add_alias<'a>(self: &mut InMemDB, client: &Client, alias: &'a str) -> Result<(), ClientError> {
         todo!()
     }
 
-    fn get_aliases(&self, client: &Client) -> Result<Vec<Alias>, Box<dyn Error>> {
+    fn get_aliases(&self, client: &Client) -> Result<Vec<Alias>, ClientError> {
         todo!()
     }
 
-    fn remove_alias(self: &mut InMemDB, aliasid: u64) -> Result<(), Box<dyn Error>> {
+    fn remove_alias(self: &mut InMemDB, aliasid: u64) -> Result<(), ClientError> {
         todo!()
     }
 
-    fn update_alias(self: &mut InMemDB, alias: &Alias) -> Result<(), Box<dyn Error>> {
+    fn update_alias(self: &mut InMemDB, alias: &Alias) -> Result<(), ClientError> {
         todo!()
     }
 
-    fn update_client_balance(self: &mut InMemDB, u: &Client) -> Result<(), Box<dyn Error>> {
+    fn update_client_balance(self: &mut InMemDB, u: &Client) -> Result<(), ClientError> {
         todo!()
     }
 
-    fn update_client_balance_delta(self: &mut InMemDB, uid: u64, balance_delta: i64) -> Result<(), Box<dyn Error>> {
+    fn update_client_balance_delta(self: &mut InMemDB, uid: u64, balance_delta: i64) -> Result<(), ClientError> {
         todo!()
     }
 }
