@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::time::UNIX_EPOCH;
-use crate::database::users::UserDB;
+use crate::database::clients::ClientDB;
 use crate::database::InitializeDB;
 use crate::database::transactions::TransactionsDB;
 
@@ -11,9 +11,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     conn.initialize()?;
 
-    conn.add_user("lul", "1")?;
-    let c = conn.get_users(
-        database::users::Ufilter::new().with_name("lul".to_string()),
+    conn.add_client("lul", "1")?;
+    let c = conn.get_clients(
+        database::clients::Ufilter::new().with_name("lul".to_string()),
     )?
     .pop()
     .unwrap();
@@ -27,11 +27,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         time,
     )?;
 
-    conn.update_user_balance(&c)?;
+    conn.update_client_balance(&c)?;
     print!(
         "{:?}",
-        conn.get_users(
-            database::users::Ufilter::new().with_name("lul".to_string())
+        conn.get_clients(
+            database::clients::Ufilter::new().with_name("lul".to_string())
         )?
         .pop()
         .unwrap()
