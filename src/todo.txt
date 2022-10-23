@@ -1,0 +1,4 @@
+
+todo: group database functions into traits
+todo: in Memory Database
+todo: in memory db tests
