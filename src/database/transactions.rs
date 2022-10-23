@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[derive(Debug)]
 pub struct Transaction {
     detail: Option<String>,
     date: u64,

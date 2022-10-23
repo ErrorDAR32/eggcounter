@@ -1,6 +1,6 @@
-pub mod transactions;
 pub mod clients;
 pub mod in_memory_database;
+pub mod transactions;
 
 use rusqlite::Connection;
 
