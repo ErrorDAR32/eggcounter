@@ -2,18 +2,14 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
-use rusqlite::Connection;
-use sql_builder::prelude::*;
-use crate::database::clients::ClientError::{InvalidQuery, QueryError};
 
-#[derive(Debug, Eq, Ord)]
+#[derive(Clone, Debug)]
 pub struct Client {
+    pub cid: u64,
     pub name: String,
     pub detail: Option<String>,
     pub balance: i32,
-    pub cid: u64,
 }
-
 
 impl Client {
     pub fn uid(&self) -> u64 {
@@ -27,38 +23,47 @@ impl PartialEq<Self> for Client {
     }
 }
 
-impl PartialOrd<Self> for Client {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cid.cmp(&other.cid))
+impl Eq for Client {}
+
+impl Ord for Client {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cid.cmp(&other.cid)
     }
 }
 
+impl PartialOrd<Self> for Client {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.cid.partial_cmp(&other.cid)
+    }
+}
+
+#[derive(Debug)]
 pub struct Alias {
     alias: String,
     aid: u64,
     uid: u64,
 }
 
-pub struct Ufilter {
-    name: Option<String>,
-    uid: Option<u64>,
+pub struct ClientFilter {
+    pub name: Option<String>,
+    pub cid: Option<u64>,
 }
 
-impl Ufilter {
-    pub fn new() -> Ufilter {
-        Ufilter {
+impl ClientFilter {
+    pub fn new() -> ClientFilter {
+        ClientFilter {
             name: None,
-            uid: None,
+            cid: None,
         }
     }
 
-    pub fn with_name(mut self, name: String) -> Ufilter {
+    pub fn with_name(mut self, name: String) -> ClientFilter {
         self.name = Some(name);
         self
     }
 
-    pub fn with_uid(mut self, uid: u64) -> Ufilter {
-        self.uid = Some(uid);
+    pub fn with_uid(mut self, uid: u64) -> ClientFilter {
+        self.cid = Some(uid);
         self
     }
 }
@@ -77,6 +82,7 @@ impl Display for ClientError {
 
 impl Error for ClientError {}
 
+
 pub trait ClientDB {
     fn add_client(&mut self, name: &str, detail: &str) -> Result<(), ClientError>;
 
@@ -84,7 +90,7 @@ pub trait ClientDB {
 
     fn remove_client(&mut self, uid: u64) -> Result<(), ClientError>;
 
-    fn get_clients(&self, filter: Ufilter) -> Result<Vec<Client>, ClientError>;
+    fn get_clients(&self, filter: ClientFilter) -> Result<Vec<Client>, ClientError>;
 
     fn add_alias<'a>(&mut self, client: &Client, alias: &'a str) -> Result<(), ClientError>;
 
@@ -96,16 +102,26 @@ pub trait ClientDB {
 
     fn update_client_balance(&mut self, u: &Client) -> Result<(), ClientError>;
 
-    fn update_client_balance_delta(&mut self, uid: u64, balance_delta: i64)
-        -> Result<(), ClientError>;
+    fn update_client_balance_delta(
+        &mut self,
+        uid: u64,
+        balance_delta: i64,
+    ) -> Result<(), ClientError>;
 }
+
+
+use crate::database::clients::ClientError::{InvalidQuery, QueryError};
+use rusqlite::Connection;
+use sql_builder::prelude::*;
+
 
 impl ClientDB for Connection {
     fn add_client(self: &mut Connection, name: &str, detail: &str) -> Result<(), ClientError> {
         let stm = SqlBuilder::insert_into("clients")
             .fields(&["name", "detail"])
             .values(&[&quote(name), &quote(detail)])
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
 
@@ -131,14 +147,15 @@ impl ClientDB for Connection {
     fn remove_client(self: &mut Connection, uid: u64) -> Result<(), ClientError> {
         let stm = SqlBuilder::delete_from("clients")
             .and_where_eq("tid", uid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
 
         Ok(())
     }
 
-    fn get_clients(&self, filter: Ufilter) -> Result<Vec<Client>, ClientError> {
+    fn get_clients(&self, filter: ClientFilter) -> Result<Vec<Client>, ClientError> {
         //todo! search on aliases
         let mut stm_builder = SqlBuilder::select_from("clients");
         stm_builder.field("*");
@@ -147,21 +164,23 @@ impl ClientDB for Connection {
             stm_builder.and_where_eq("name", quote(n));
         }
 
-        if let Some(uid) = filter.uid {
+        if let Some(uid) = filter.cid {
             stm_builder.and_where_eq("uid", uid);
         }
         let stm = stm_builder.sql().or(Err(InvalidQuery))?;
 
         let mut sql_statement = self.prepare(&stm).or(Err(InvalidQuery))?;
 
-        let clients = sql_statement.query_map([], |r| {
+        let clients = sql_statement
+            .query_map([], |r| {
                 Ok(Client {
                     cid: r.get(0)?,
                     name: r.get(1)?,
                     balance: r.get(2)?,
                     detail: r.get(3)?,
                 })
-            }).or(Err(QueryError))?;
+            })
+            .or(Err(QueryError))?;
 
         Ok(clients
             .filter_map(|u| match u {
@@ -175,7 +194,8 @@ impl ClientDB for Connection {
         let stm = SqlBuilder::insert_into("aliases")
             .fields(&["uid", "alias"])
             .values(&[client.cid.to_string(), quote(alias)])
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
 
@@ -186,17 +206,20 @@ impl ClientDB for Connection {
         let stm = SqlBuilder::select_from("aliases")
             .fields(&["aid", "alias"])
             .and_where_eq("uid", client.cid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         let mut sql_statement = self.prepare(&stm).or(Err(InvalidQuery))?;
 
-        let aliases = sql_statement.query_map([], |r| {
-            Ok(Alias {
-                aid: r.get(0)?,
-                alias: r.get(1)?,
-                uid: client.cid,
+        let aliases = sql_statement
+            .query_map([], |r| {
+                Ok(Alias {
+                    aid: r.get(0)?,
+                    alias: r.get(1)?,
+                    uid: client.cid,
+                })
             })
-        }).or(Err(QueryError))?;
+            .or(Err(QueryError))?;
 
         Ok(aliases
             .filter_map(|u| match u {
@@ -209,7 +232,8 @@ impl ClientDB for Connection {
     fn remove_alias(self: &mut Connection, aliasid: u64) -> Result<(), ClientError> {
         let stm = SqlBuilder::delete_from("aliases")
             .and_where_eq("aid", aliasid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
 
@@ -220,7 +244,8 @@ impl ClientDB for Connection {
         let stm = SqlBuilder::update_table("aliases")
             .set("alias", &alias.alias)
             .and_where_eq("aid", alias.aid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
 
@@ -231,18 +256,21 @@ impl ClientDB for Connection {
         let tp_stm = SqlBuilder::select_from("transactions")
             .field("SUM(price)")
             .and_where_eq("uid", u.cid)
-            .subquery().or(Err(InvalidQuery))?;
+            .subquery()
+            .or(Err(InvalidQuery))?;
 
         let pd_stm = SqlBuilder::select_from("transactions")
             .field("SUM(payment)")
             .and_where_eq("uid", u.cid)
-            .subquery().or(Err(InvalidQuery))?;
+            .subquery()
+            .or(Err(InvalidQuery))?;
 
         let stm = SqlBuilder::update_table("clients")
             .field("balance")
             .set("balance", &format!("{} - {}", pd_stm, tp_stm))
             .and_where_eq("uid", u.cid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
         Ok(())
@@ -257,7 +285,8 @@ impl ClientDB for Connection {
             .field("balance")
             .set("balance", &format!("balance + {}", balance_delta))
             .and_where_eq("uid", uid)
-            .sql().or(Err(InvalidQuery))?;
+            .sql()
+            .or(Err(InvalidQuery))?;
 
         self.execute(&stm, []).or(Err(QueryError))?;
         Ok(())
