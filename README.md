@@ -2,7 +2,7 @@
 A simple application and server for keeping accountability on my family business
 
 this project aims to provide:
-- a client list,
+- a client list
 - a transaction list
 - transactions associated to a client
 - aliases to refer to clients with different names
